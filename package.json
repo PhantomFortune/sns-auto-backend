@@ -1,0 +1,15 @@
+{
+  "name": "youtube-automation-backend",
+  "version": "1.0.0",
+  "description": "Backend for YouTube Automation with Prisma Studio support",
+  "scripts": {
+    "prisma:studio": "prisma studio",
+    "prisma:generate": "prisma generate",
+    "prisma:push": "prisma db push",
+    "prisma:migrate": "prisma migrate dev"
+  },
+  "devDependencies": {
+    "@prisma/client": "^6.19.0",
+    "prisma": "^6.19.0"
+  }
+}

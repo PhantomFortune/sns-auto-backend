@@ -1,0 +1,57 @@
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.log
+*.sqlite3
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Environment variables / secrets
+.env
+.env.*
+
+# OAuth credentials and tokens (DO NOT COMMIT)
+client_secret.json
+youtube_token.json
+youtube_token.json.backup
+*.token.json
+*.secret.json
+google_calendar_token.json
+
+# Documentation and test files that may contain secrets
+README_YOUTUBE_SETUP.md
+REQUEST_TOKEN_FROM_CLIENT.md
+test_*.py
+*_token.py
+authenticate_*.py
+verify_*.py
+check_*.py
+create_*.py
+setup_env.ps1
+*.ps1
+
+# Alembic migration versions (if you want to ignore them)
+# alembic/versions/*.py
+
+# OS / editor files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# Python build artifacts
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Prisma
+node_modules/
+prisma/migrations/
+

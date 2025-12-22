@@ -1,0 +1,50 @@
+// Prisma Schema File
+// This file defines your database structure for Prisma Studio visualization
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model ShortsScript {
+  id            String   @id
+  theme         String   @db.VarChar
+  duration      Int
+  scriptFormat  String   @map("script_format") @db.VarChar
+  tone          String   @db.VarChar
+  sections      Json
+  generatedAt   DateTime @map("generated_at") @default(now())
+  createdAt     DateTime @map("created_at") @default(now())
+  updatedAt     DateTime @map("updated_at") @updatedAt
+
+  @@index([theme])
+  @@map("shorts_scripts")
+}
+
+model LivePlan {
+  id                  String   @id
+  type                String   @db.VarChar
+  title               String   @db.VarChar
+  durationHours       Int      @map("duration_hours")
+  durationMinutes     Int      @map("duration_minutes")
+  purposes            Json
+  targetAudience      String   @map("target_audience") @db.VarChar
+  preferredTimeStart  String?  @map("preferred_time_start") @db.VarChar
+  preferredTimeEnd    String?  @map("preferred_time_end") @db.VarChar
+  notes               String?  @db.Text
+  difficulty          String?  @db.VarChar
+  flow                Json
+  preparations        Json
+  generatedAt         DateTime @map("generated_at") @default(now())
+  createdAt           DateTime @map("created_at") @default(now())
+  updatedAt           DateTime @map("updated_at") @updatedAt
+
+  @@index([type])
+  @@index([title])
+  @@map("live_plans")
+}
+
