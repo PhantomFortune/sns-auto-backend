@@ -174,27 +174,29 @@ class GoogleCalendarService:
                 start = event.get('start', {}).get('dateTime') or event.get('start', {}).get('date')
                 end = event.get('end', {}).get('dateTime') or event.get('end', {}).get('date')
                 
-                # Extract type from description or title
+                # Extract type from description
+                # Rules: Check description for "youtube" (case-insensitive) or "X" (uppercase)
+                # If "youtube" found → YouTubeライブ配信
+                # If "X" (uppercase) found → X自動投稿
+                # Otherwise → 重要イベント
                 description = event.get('description', '')
-                summary = event.get('summary', '')
                 event_type = None
                 
-                # First, try to get type from description
+                # First, try to get type from [種類: ...] prefix (if backend added it)
                 if description:
                     import re
                     type_match = re.search(r'\[種類: (.+?)\]', description)
                     if type_match:
-                        event_type = type_match.group(1)
+                        extracted_type = type_match.group(1)
+                        if extracted_type in ["YouTubeライブ配信", "X自動投稿", "重要イベント"]:
+                            event_type = extracted_type
                 
-                # If not found in description, determine from title
-                # Rules: "Youtube" (case-insensitive) → YouTubeライブ配信
-                #        "X" (uppercase) → X自動投稿
-                #        Otherwise → 重要イベント
+                # If not found in prefix, check description for keywords
                 if not event_type:
-                    summary_lower = summary.lower()
-                    if 'youtube' in summary_lower:
+                    description_lower = description.lower()
+                    if 'youtube' in description_lower:
                         event_type = "YouTubeライブ配信"
-                    elif 'X' in summary:  # Check for uppercase X
+                    elif 'X' in description:  # Check for uppercase X in description
                         event_type = "X自動投稿"
                     else:
                         event_type = "重要イベント"
