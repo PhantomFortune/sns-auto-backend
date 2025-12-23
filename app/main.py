@@ -9,6 +9,7 @@ import sys
 
 from app.core.config import settings
 from app.api.v1.router import api_router
+from app.api.v1.websocket import start_schedule_check_task, stop_schedule_check_task
 
 # Configure logging
 logging.basicConfig(
@@ -87,12 +88,17 @@ async def startup_event():
         from app.models import ShortsScript
         Base.metadata.create_all(bind=engine)
         logger.info("Database tables created/verified")
+    
+    # Start WebSocket schedule check task
+    await start_schedule_check_task()
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Application shutdown event"""
     logger.info("Shutting down SNS Automation Backend...")
+    # Stop WebSocket schedule check task
+    await stop_schedule_check_task()
 
 
 if __name__ == "__main__":
