@@ -55,9 +55,19 @@ class YouTubeAPIService:
                 self.data_service = build('youtube', 'v3', developerKey=settings.YOUTUBE_API_KEY)
                 logger.info("YouTube Data API v3 initialized with API key")
             
-            # Try to initialize Analytics API with OAuth2 if credentials are available
-            if settings.YOUTUBE_CLIENT_SECRET_JSON:
+            # Try to initialize Analytics API with OAuth2
+            # Check if client_secret.json exists in backend directory or if env var is set
+            backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            client_secret_file = os.path.join(backend_dir, 'client_secret.json')
+            
+            if settings.YOUTUBE_CLIENT_SECRET_JSON or os.path.exists(client_secret_file):
+                logger.info(f"Initializing OAuth2 for YouTube Analytics API...")
+                logger.info(f"client_secret.json exists: {os.path.exists(client_secret_file)}")
+                logger.info(f"YOUTUBE_CLIENT_SECRET_JSON set: {bool(settings.YOUTUBE_CLIENT_SECRET_JSON)}")
                 self._initialize_oauth2()
+            else:
+                logger.warning(f"client_secret.json not found at {client_secret_file} and YOUTUBE_CLIENT_SECRET_JSON not set")
+                logger.warning("YouTube Analytics API will not be available without OAuth2 credentials")
             
             if not self.data_service:
                 logger.warning("YouTube API services not initialized. API key or OAuth2 credentials required.")
@@ -70,7 +80,12 @@ class YouTubeAPIService:
         try:
             # Parse client_secret.json
             client_config = None
-            client_secret_file = 'client_secret.json'
+            # Use absolute path to ensure we find the file regardless of current working directory
+            backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            client_secret_file = os.path.join(backend_dir, 'client_secret.json')
+            
+            logger.info(f"Looking for client_secret.json at: {client_secret_file}")
+            logger.info(f"client_secret.json exists: {os.path.exists(client_secret_file)}")
             
             # Try as file path first
             if settings.YOUTUBE_CLIENT_SECRET_JSON and os.path.exists(settings.YOUTUBE_CLIENT_SECRET_JSON):
@@ -102,8 +117,14 @@ class YouTubeAPIService:
                 return
             
             # Check for existing token
-            token_file = 'youtube_token.json'
+            # Use absolute path to ensure we find the file regardless of current working directory
+            backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            token_file = os.path.join(backend_dir, 'youtube_token.json')
             creds = None
+            
+            logger.info(f"Looking for token file at: {token_file}")
+            logger.info(f"Token file exists: {os.path.exists(token_file)}")
+            logger.info(f"Current working directory: {os.getcwd()}")
             
             # Try to load token from environment variable first
             if settings.YOUTUBE_TOKEN_JSON:
@@ -126,9 +147,14 @@ class YouTubeAPIService:
                     # Don't specify SCOPES to use token's original scopes
                     # The token file contains the scopes it was created with
                     creds = Credentials.from_authorized_user_file(token_file)
-                    logger.info("Loaded existing OAuth2 token from file")
+                    logger.info(f"Loaded existing OAuth2 token from file: {token_file}")
                 except Exception as e:
-                    logger.warning(f"Failed to load existing token: {e}")
+                    logger.warning(f"Failed to load existing token from {token_file}: {e}")
+                    import traceback
+                    logger.warning(traceback.format_exc())
+            elif not creds:
+                logger.warning(f"Token file not found at: {token_file}")
+                logger.warning(f"Current working directory: {os.getcwd()}")
             
             # If there are no (valid) credentials available, try to create from refresh token
             if not creds or not creds.valid:
@@ -202,11 +228,18 @@ class YouTubeAPIService:
             # Save the credentials for the next run
             if creds:
                 try:
+                    # Ensure token_file is absolute path
+                    if not os.path.isabs(token_file):
+                        backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                        token_file = os.path.join(backend_dir, token_file)
+                    
                     with open(token_file, 'w') as token:
                         token.write(creds.to_json())
                     logger.info(f"Saved OAuth2 token to {token_file}")
                 except Exception as e:
-                    logger.warning(f"Failed to save token to file: {e}")
+                    logger.warning(f"Failed to save token to file {token_file}: {e}")
+                    import traceback
+                    logger.warning(traceback.format_exc())
                 
                 self.credentials = creds
                 self.analytics_service = build('youtubeAnalytics', 'v2', credentials=creds)
