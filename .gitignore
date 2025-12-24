@@ -20,8 +20,7 @@ youtube_token.json
 youtube_token.json.backup
 *.token.json
 *.secret.json
-calendar_token.json
-
+google_calendar_token.json
 
 # Documentation and test files that may contain secrets
 README_YOUTUBE_SETUP.md
