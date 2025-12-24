@@ -59,3 +59,36 @@ class DownloadFileResponse(BaseModel):
     file_name: str
     file_size: int
 
+
+class SaveScheduledPostRequest(BaseModel):
+    """予約投稿保存リクエスト"""
+    content: str  # 投稿テキスト
+    scheduled_datetime: datetime  # 予約投稿日時
+    image_base64: Optional[str] = None  # 画像（Base64エンコード）
+
+
+class ScheduledPostResponse(BaseModel):
+    """予約投稿レスポンス"""
+    id: str
+    content: str
+    image_path: Optional[str]
+    scheduled_datetime: datetime
+    status: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class ScheduledPostListResponse(BaseModel):
+    """予約投稿一覧レスポンス"""
+    success: bool
+    posts: list[ScheduledPostResponse]
+    total: int
+
+
+class UpdateScheduledPostRequest(BaseModel):
+    """予約投稿更新リクエスト"""
+    content: Optional[str] = None
+    scheduled_datetime: Optional[datetime] = None
+    image_base64: Optional[str] = None  # 新しい画像（Base64エンコード、Noneの場合は既存画像を維持）
+    status: Optional[str] = None
+

@@ -26,6 +26,33 @@ class StorageService:
         self.x_report_dir = self.report_dir / "X分析レポート登録簿"
         self.scheduled_post_dir = self.storage_dir / "X投稿登録簿"
     
+    def generate_scheduled_post_filename(self, timestamp: Optional[datetime] = None) -> str:
+        """
+        予約投稿ファイル名を生成
+        形式: X_Post_YY-M-D-H-M-S-{millisecond}.png
+        例: X_Post_25-8-17-15-30-45-123.png
+        
+        Args:
+            timestamp: タイムスタンプ（Noneの場合は現在時刻）
+        
+        Returns:
+            ファイル名（拡張子付き）
+        """
+        if timestamp is None:
+            timestamp = datetime.now()
+        
+        year = timestamp.year % 100
+        month = timestamp.month
+        day = timestamp.day
+        hour = timestamp.hour
+        minute = timestamp.minute
+        second = timestamp.second
+        microsecond = timestamp.microsecond
+        
+        filename = f"X_Post_{year}-{month}-{day}-{hour}-{minute}-{second}-{microsecond // 1000:03d}.png"
+        
+        return filename
+    
     def generate_report_filename(self, report_type: str, timestamp: Optional[datetime] = None) -> str:
         """
         レポートファイル名を生成

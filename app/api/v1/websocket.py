@@ -254,7 +254,7 @@ async def stop_schedule_check_task():
 # WebSocketエンドポイント
 from fastapi import APIRouter
 
-router = APIRouter()
+router = APIRouter(prefix="/ws", tags=["websocket"])
 
 
 @router.websocket("/schedule-updates")
