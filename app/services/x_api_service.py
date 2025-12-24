@@ -38,6 +38,8 @@ class XAPIService:
         self.client: Optional[tweepy.Client] = None
         self.api: Optional[tweepy.API] = None
         self.user_id: Optional[str] = None
+        self.followers_count_cache: Optional[int] = None
+        self.followers_count_cache_time: Optional[datetime] = None
         self._initialize_client()
     
     def _initialize_client(self):
@@ -50,8 +52,9 @@ class XAPIService:
                 consumer_secret=settings.X_API_KEY_SECRET,
                 access_token=settings.X_ACCESS_TOKEN,
                 access_token_secret=settings.X_ACCESS_TOKEN_SECRET,
-                # レート制限に達した場合は tweepy 側で自動的にスリープしてくれる
-                wait_on_rate_limit=True,
+                # Disable automatic rate limit waiting to prevent infinite retries
+                # We'll handle rate limits explicitly in the API call
+                wait_on_rate_limit=False,
             )
             
             # OAuth 1.0a for user context
@@ -61,7 +64,7 @@ class XAPIService:
                 settings.X_ACCESS_TOKEN,
                 settings.X_ACCESS_TOKEN_SECRET,
             )
-            self.api = tweepy.API(auth, wait_on_rate_limit=True)
+            self.api = tweepy.API(auth, wait_on_rate_limit=False)
             
             logger.info("X API client initialized successfully")
         except Exception as e:
@@ -158,17 +161,24 @@ class XAPIService:
         Returns:
             XAnalyticsData with all metrics
         """
+        # Track API calls for debugging
+        api_call_count = 0
+        
         try:
             # Get user ID (with async wrapper if needed)
             if self.user_id:
                 user_id = self.user_id
+                logger.debug("Using cached user_id, no API call needed")
             else:
                 # Wrap synchronous API call in executor
                 loop = asyncio.get_event_loop()
+                logger.info("Fetching user ID from X API...")
                 user = await loop.run_in_executor(
                     None,
                     lambda: self.client.get_user(username=settings.X_USERNAME)
                 )
+                api_call_count += 1
+                logger.info(f"API call #{api_call_count}: get_user (username lookup)")
                 if user.data:
                     self.user_id = user.data.id
                     user_id = self.user_id
@@ -186,9 +196,14 @@ class XAPIService:
             end_time_str = end_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
             
             # Fetch user's tweets with metrics
+            # NOTE: wait_on_rate_limit=False to prevent infinite retries
             try:
                 # Wrap synchronous API call in executor to prevent blocking
                 loop = asyncio.get_event_loop()
+                logger.info(f"Fetching tweets from X API for period {period}...")
+                
+                # Call API without automatic rate limit waiting
+                # Rate limits will be handled explicitly by raising TooManyRequests exception
                 tweets_response = await loop.run_in_executor(
                     None,
                     lambda: self.client.get_users_tweets(
@@ -200,9 +215,25 @@ class XAPIService:
                         expansions=["author_id"],
                     )
                 )
+                api_call_count += 1
+                logger.info(f"API call #{api_call_count}: get_users_tweets (period: {period})")
+                    
             except tweepy.TooManyRequests as e:
-                # Rate limit hit - re-raise to be handled by caller
+                # Rate limit hit - extract reset time and re-raise to be handled by caller
                 logger.error(f"Rate limit exceeded while fetching tweets for period {period}: {e}")
+                
+                # Extract reset time from error if available
+                reset_time = None
+                if hasattr(e, 'response') and e.response is not None:
+                    headers = e.response.headers if hasattr(e.response, 'headers') else {}
+                    reset_time_str = headers.get('x-rate-limit-reset', headers.get('X-Rate-Limit-Reset'))
+                    if reset_time_str:
+                        try:
+                            reset_time = int(reset_time_str)
+                        except (ValueError, TypeError):
+                            pass
+                
+                # Re-raise with reset time information
                 raise
             except Exception as e:
                 # Other API errors
@@ -335,18 +366,57 @@ class XAPIService:
                         logger.debug(f"Hashtag found: #{original_tag} (normalized: {normalized_tag}) - {like_count} likes")
             
             # Get user info for follower count
-            loop = asyncio.get_event_loop()
-            user_response = await loop.run_in_executor(
-                None,
-                lambda: self.client.get_user(
-                    id=user_id,
-                    user_fields=["public_metrics"],
-                )
+            # OPTIMIZATION: Cache followers count for 5 minutes to reduce API calls
+            # This reduces API calls from 2 per request to 1 per request (after first call)
+            now_utc = datetime.utcnow().replace(tzinfo=timezone.utc)
+            cache_valid = (
+                self.followers_count_cache is not None and
+                self.followers_count_cache_time is not None and
+                (now_utc - self.followers_count_cache_time).total_seconds() < 300  # 5 minutes cache
             )
             
-            followers_count = 0
-            if user_response.data:
-                followers_count = user_response.data.public_metrics.get("followers_count", 0)
+            if cache_valid:
+                followers_count = self.followers_count_cache
+                logger.debug(f"Using cached followers count: {followers_count} (no API call needed)")
+            else:
+                # Fetch fresh followers count
+                loop = asyncio.get_event_loop()
+                logger.info("Fetching followers count from X API...")
+                try:
+                    user_response = await loop.run_in_executor(
+                        None,
+                        lambda: self.client.get_user(
+                            id=user_id,
+                            user_fields=["public_metrics"],
+                        )
+                    )
+                    api_call_count += 1
+                    logger.info(f"API call #{api_call_count}: get_user (followers count)")
+                    
+                    followers_count = 0
+                    if user_response.data:
+                        followers_count = user_response.data.public_metrics.get("followers_count", 0)
+                    
+                    # Cache the result
+                    self.followers_count_cache = followers_count
+                    self.followers_count_cache_time = now_utc
+                    logger.info(f"Fetched and cached followers count: {followers_count}")
+                except tweepy.TooManyRequests as e:
+                    # If rate limited, use cached value if available, otherwise use 0
+                    if self.followers_count_cache is not None:
+                        followers_count = self.followers_count_cache
+                        logger.warning(f"Rate limited while fetching followers count, using cached value: {followers_count}")
+                    else:
+                        followers_count = 0
+                        logger.warning(f"Rate limited while fetching followers count, no cache available, using 0")
+                except Exception as e:
+                    # If other error, use cached value if available, otherwise use 0
+                    if self.followers_count_cache is not None:
+                        followers_count = self.followers_count_cache
+                        logger.warning(f"Error fetching followers count ({e}), using cached value: {followers_count}")
+                    else:
+                        followers_count = 0
+                        logger.warning(f"Error fetching followers count ({e}), no cache available, using 0")
             
             # Generate engagement trend
             data_points = 12 if period == "2hours" else (24 if period == "1day" else (7 if period == "1week" else 30))
@@ -412,6 +482,7 @@ class XAPIService:
             # Log detailed summary for debugging and validation
             logger.info(
                 f"Analytics summary for {period}: "
+                f"total_api_calls={api_call_count}, "
                 f"total_tweets_fetched={len(tweets)}, "
                 f"tweets_in_period={tweets_in_period_count}, "
                 f"original_tweets={original_tweets_count}, "

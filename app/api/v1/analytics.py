@@ -6,6 +6,7 @@ from fastapi import APIRouter, Query, HTTPException, status
 from typing import Literal
 import logging
 import tweepy
+from datetime import datetime
 
 from app.schemas.x_analytics import (
     XAnalyticsData,
@@ -63,13 +64,55 @@ async def analyze_x_data(
         return analytics_data
         
     except tweepy.TooManyRequests as e:
-        logger.warning(f"Rate limited: {e}")
+        # Extract rate limit information from error
+        reset_time = None
+        limit = None
+        remaining = None
+        
+        if hasattr(e, 'response') and e.response is not None:
+            headers = e.response.headers if hasattr(e.response, 'headers') else {}
+            reset_time_str = headers.get('x-rate-limit-reset', headers.get('X-Rate-Limit-Reset'))
+            limit_str = headers.get('x-rate-limit-limit', headers.get('X-Rate-Limit-Limit'))
+            remaining_str = headers.get('x-rate-limit-remaining', headers.get('X-Rate-Limit-Remaining'))
+            
+            if reset_time_str:
+                try:
+                    reset_time = int(reset_time_str)
+                    current_time = int(datetime.now().timestamp())
+                    retry_after = max(reset_time - current_time, 60)  # At least 60 seconds
+                except (ValueError, TypeError):
+                    retry_after = 60
+            else:
+                retry_after = 60
+            
+            if limit_str:
+                try:
+                    limit = int(limit_str)
+                except (ValueError, TypeError):
+                    pass
+            
+            if remaining_str:
+                try:
+                    remaining = int(remaining_str)
+                except (ValueError, TypeError):
+                    pass
+        
+        # Log detailed rate limit information
+        logger.error(f"X API Rate Limit Exceeded:")
+        logger.error(f"  Error: {e}")
+        logger.error(f"  Rate Limit: {limit if limit is not None else 'unknown'}")
+        logger.error(f"  Remaining: {remaining if remaining is not None else 'unknown'}")
+        logger.error(f"  Reset Time: {reset_time if reset_time else 'unknown'}")
+        logger.error(f"  Retry After: {retry_after} seconds")
+        
         raise HTTPException(
             status_code=429,
             detail={
                 "message": "X APIのレート制限に達しました",
                 "api_timeout": True,
-                "retry_after_seconds": 60,
+                "retry_after_seconds": retry_after,
+                "rate_limit": limit,
+                "remaining": remaining,
             },
         )
     except tweepy.TwitterServerError as e:
