@@ -140,15 +140,23 @@ async def get_all_schedules() -> List[dict]:
             max_results=2500
         )
         
-        # X自動投稿とYouTubeライブ配信のスケジュールをフィルタリング
+        # X自動投稿、YouTubeライブ配信、重要イベント（#重要のみ）のスケジュールをフィルタリング
         relevant_schedules = []
         for event in events:
             event_type = event.get('type')
             description = event.get('description', '')
             description_lower = description.lower()
             
-            # タイプで判定
+            # 最優先: 説明欄に「#重要」が含まれる場合は必ず重要イベントとして認識
+            if '#重要' in description:
+                relevant_schedules.append(event)
+                continue
+            
+            # タイプで判定（重要イベントは「#重要」がある場合のみ）
             if event_type in ['X自動投稿', 'YouTubeライブ配信']:
+                relevant_schedules.append(event)
+            elif event_type == '重要イベント' and '#重要' in description:
+                # タイプが重要イベントでも「#重要」がある場合のみ
                 relevant_schedules.append(event)
             else:
                 # 説明欄から判定
@@ -163,6 +171,7 @@ async def get_all_schedules() -> List[dict]:
                     relevant_schedules.append(event)
                 elif 'youtube' in description_lower:
                     relevant_schedules.append(event)
+                # 重要イベントは「#重要」がある場合のみ（上記で既にチェック済み）
         
         # 未来のスケジュールのみフィルタリング
         future_schedules = []

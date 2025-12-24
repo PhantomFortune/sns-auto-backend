@@ -524,7 +524,7 @@ class CreateEventRequest(BaseModel):
     startTime: str  # HH:mm format
     endTime: str  # HH:mm format
     description: Optional[str] = None
-    type: Optional[str] = None  # Schedule type: "YouTubeライブ配信", "X自動投稿", "重要イベント"
+    type: Optional[str] = None  # Schedule type: "YouTubeライブ配信", "X自動投稿", "重要イベント", "その他"
     calendarId: str = "primary"
 
 
@@ -534,7 +534,7 @@ class UpdateEventRequest(BaseModel):
     startTime: Optional[str] = None  # HH:mm format
     endTime: Optional[str] = None  # HH:mm format
     description: Optional[str] = None
-    type: Optional[str] = None  # Schedule type: "YouTubeライブ配信", "X自動投稿", "重要イベント"
+    type: Optional[str] = None  # Schedule type: "YouTubeライブ配信", "X自動投稿", "重要イベント", "その他"
     calendarId: str = "primary"
 
 
@@ -547,6 +547,7 @@ SCHEDULE_TYPE_TO_COLOR_ID = {
     "YouTubeライブ配信": "5",  # Banana (黄色) - matches frontend #fbbf24
     "X自動投稿": "9",  # Blueberry (青) - matches frontend #3b82f6
     "重要イベント": "11",  # Tomato (赤) - matches frontend #dc2626
+    "その他": "8",  # Graphite (グレー) - matches frontend #9aa0a6
 }
 
 

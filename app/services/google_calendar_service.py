@@ -175,9 +175,10 @@ class GoogleCalendarService:
                 end = event.get('end', {}).get('dateTime') or event.get('end', {}).get('date')
                 
                 # Extract type from description
-                # Rules: Check description for "youtube" (case-insensitive) or "X" (uppercase)
-                # If "youtube" found → YouTubeライブ配信
-                # If "X" (uppercase) found → X自動投稿
+                # Rules: 
+                # Priority 1: Check for "#重要" hashtag → 重要イベント (highest priority)
+                # Priority 2: Check for "youtube" (case-insensitive) → YouTubeライブ配信
+                # Priority 3: Check for "X" (uppercase) → X自動投稿
                 # Otherwise → 重要イベント
                 description = event.get('description', '')
                 event_type = None
@@ -188,18 +189,24 @@ class GoogleCalendarService:
                     type_match = re.search(r'\[種類: (.+?)\]', description)
                     if type_match:
                         extracted_type = type_match.group(1)
-                        if extracted_type in ["YouTubeライブ配信", "X自動投稿", "重要イベント"]:
+                        if extracted_type in ["YouTubeライブ配信", "X自動投稿", "重要イベント", "その他"]:
                             event_type = extracted_type
                 
                 # If not found in prefix, check description for keywords
                 if not event_type:
                     description_lower = description.lower()
-                    if 'youtube' in description_lower:
+                    # Priority 1: Check for "#重要" hashtag (highest priority)
+                    if '#重要' in description:
+                        event_type = "重要イベント"
+                    elif 'youtube' in description_lower:
+                        # Priority 2: Check for "youtube" (case-insensitive)
                         event_type = "YouTubeライブ配信"
-                    elif 'X' in description:  # Check for uppercase X in description
+                    elif 'X' in description:
+                        # Priority 3: Check for "X" (uppercase) in description
                         event_type = "X自動投稿"
                     else:
-                        event_type = "重要イベント"
+                        # Otherwise → その他
+                        event_type = "その他"
                 
                 result.append({
                     'id': event.get('id'),
