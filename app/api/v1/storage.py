@@ -12,7 +12,7 @@ import uuid
 import base64
 import pandas as pd
 from pathlib import Path
-from PIL import Image, ImageDraw, ImageFont
+# PIL imports removed - no longer needed since we don't composite images
 
 from app.database import get_db
 from sqlalchemy.orm import Session
@@ -33,110 +33,6 @@ from app.services.storage_service import storage_service
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/storage", tags=["Storage"])
-
-
-def create_composite_image(image_bytes: bytes, text: str) -> bytes:
-    """
-    画像とテキストを合成した画像を生成
-    
-    Args:
-        image_bytes: 元の画像のバイトデータ
-        text: オーバーレイするテキスト
-    
-    Returns:
-        合成された画像のバイトデータ（PNG形式）
-    """
-    try:
-        # 画像を開く
-        image = Image.open(io.BytesIO(image_bytes))
-        
-        # 画像をRGBモードに変換（RGBAの場合は背景を白にする）
-        if image.mode == 'RGBA':
-            # 白背景の画像を作成
-            rgb_image = Image.new('RGB', image.size, (255, 255, 255))
-            rgb_image.paste(image, mask=image.split()[3])  # アルファチャンネルをマスクとして使用
-            image = rgb_image
-        elif image.mode != 'RGB':
-            image = image.convert('RGB')
-        
-        # 画像サイズを取得
-        width, height = image.size
-        
-        # テキストを描画するための画像を作成（透明背景）
-        text_overlay = Image.new('RGBA', (width, height), (255, 255, 255, 0))
-        draw = ImageDraw.Draw(text_overlay)
-        
-        # フォントを読み込む（システムフォントを使用）
-        try:
-            # Windowsの場合
-            font_size = max(24, min(width, height) // 20)
-            font = ImageFont.truetype("arial.ttf", font_size)
-        except:
-            try:
-                # Linux/Macの場合
-                font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", font_size)
-            except:
-                # フォントが見つからない場合はデフォルトフォントを使用
-                font = ImageFont.load_default()
-        
-        # テキストを複数行に分割（幅に合わせて）
-        max_width = width - 40  # 左右に20pxのマージン
-        words = text.split()
-        lines = []
-        current_line = []
-        
-        for word in words:
-            test_line = ' '.join(current_line + [word])
-            bbox = draw.textbbox((0, 0), test_line, font=font)
-            text_width = bbox[2] - bbox[0]
-            
-            if text_width <= max_width:
-                current_line.append(word)
-            else:
-                if current_line:
-                    lines.append(' '.join(current_line))
-                current_line = [word]
-        
-        if current_line:
-            lines.append(' '.join(current_line))
-        
-        # テキストの位置を計算（下部中央）
-        line_height = font_size + 10
-        total_text_height = len(lines) * line_height
-        y_start = height - total_text_height - 30  # 下部から30px上
-        
-        # テキスト背景を描画（半透明の黒）
-        padding = 10
-        text_bg_y = y_start - padding
-        text_bg_height = total_text_height + padding * 2
-        overlay_bg = Image.new('RGBA', (width, text_bg_height), (0, 0, 0, 180))
-        text_overlay.paste(overlay_bg, (0, text_bg_y), overlay_bg)
-        
-        # テキストを描画
-        y = y_start
-        for line in lines:
-            bbox = draw.textbbox((0, 0), line, font=font)
-            text_width = bbox[2] - bbox[0]
-            x = (width - text_width) // 2  # 中央揃え
-            draw.text((x, y), line, fill=(255, 255, 255, 255), font=font)
-            y += line_height
-        
-        # 元の画像とテキストオーバーレイを合成
-        composite = Image.alpha_composite(
-            image.convert('RGBA'),
-            text_overlay
-        ).convert('RGB')
-        
-        # PNG形式でバイトデータに変換
-        output = io.BytesIO()
-        composite.save(output, format='PNG', quality=95)
-        output.seek(0)
-        
-        return output.getvalue()
-    
-    except Exception as e:
-        logger.error(f"Failed to create composite image: {e}", exc_info=True)
-        raise
 
 
 def generate_excel_from_data(
@@ -543,15 +439,13 @@ async def save_scheduled_post(
     """
     予約投稿を保存
     
-    - 画像とテキストを合成した画像を生成
-    - ストレージに保存
+    - 元の画像をそのままストレージに保存（テキストは画像上に合成しない）
     - データベースに予約投稿情報を記録
     """
     try:
         timestamp = datetime.now(timezone.utc)
         
-        # 画像とテキストを合成
-        composite_image_bytes = None
+        # 画像をそのまま保存（合成しない）
         image_path = None
         
         if request.image_base64:
@@ -559,12 +453,9 @@ async def save_scheduled_post(
                 # Base64デコード
                 image_data = base64.b64decode(request.image_base64.split(',')[-1])
                 
-                # 合成画像を生成
-                composite_image_bytes = create_composite_image(image_data, request.content)
-                
-                # ストレージに保存
+                # 元の画像をそのままストレージに保存
                 file_path, file_name, file_size = storage_service.save_file(
-                    file_content=composite_image_bytes,
+                    file_content=image_data,
                     category="scheduled_post",
                     filename=storage_service.generate_scheduled_post_filename(timestamp),
                     timestamp=timestamp
@@ -686,7 +577,7 @@ async def update_scheduled_post(
         if request.status is not None:
             scheduled_post.status = request.status
         
-        # 画像の更新処理
+        # 画像の更新処理（元の画像をそのまま保存）
         if request.image_base64 is not None:
             if request.image_base64 == "":  # 空文字列の場合は画像を削除
                 # 既存の画像を削除
@@ -702,14 +593,10 @@ async def update_scheduled_post(
                     if scheduled_post.image_path:
                         storage_service.delete_file(scheduled_post.image_path)
                     
-                    # 合成画像を生成
-                    content = request.content if request.content is not None else scheduled_post.content
-                    composite_image_bytes = create_composite_image(image_data, content)
-                    
-                    # ストレージに保存
+                    # 元の画像をそのままストレージに保存（合成しない）
                     timestamp = datetime.now(timezone.utc)
                     file_path, file_name, file_size = storage_service.save_file(
-                        file_content=composite_image_bytes,
+                        file_content=image_data,
                         category="scheduled_post",
                         filename=storage_service.generate_scheduled_post_filename(timestamp),
                         timestamp=timestamp
@@ -832,10 +719,35 @@ async def get_scheduled_post_image(
                 detail="画像ファイルがストレージに見つかりません"
             )
         
-        return FileResponse(
-            path=str(file_path),
-            filename=file_path.name,
-            media_type="image/png"
+        from fastapi.responses import Response
+        import os
+        
+        # 画像ファイルを読み込む
+        with open(file_path, "rb") as f:
+            image_data = f.read()
+        
+        # ファイル拡張子からメディアタイプを判定
+        ext = file_path.suffix.lower()
+        media_type_map = {
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".gif": "image/gif",
+            ".webp": "image/webp",
+        }
+        media_type = media_type_map.get(ext, "image/png")
+        
+        # キャッシュを無効化するためのヘッダーを設定
+        headers = {
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        }
+        
+        return Response(
+            content=image_data,
+            media_type=media_type,
+            headers=headers
         )
     
     except HTTPException:
