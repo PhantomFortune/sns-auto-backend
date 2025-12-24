@@ -5,7 +5,7 @@ import os
 import json
 import logging
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Query, Request, Body
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
@@ -604,6 +604,16 @@ async def create_calendar_event(event_data: CreateEventRequest):
         
         logger.info(f"Created Google Calendar event: {created_event.get('id')}")
         
+        # Notify WebSocket clients about schedule change
+        try:
+            from app.api.v1.websocket import manager
+            await manager.broadcast({
+                "type": "schedule_update",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
+        except Exception as e:
+            logger.warning(f"Failed to notify WebSocket clients: {e}")
+        
         return {
             "success": True,
             "event": {
@@ -682,6 +692,16 @@ async def update_calendar_event(event_id: str, event_data: UpdateEventRequest):
         
         logger.info(f"Updated Google Calendar event: {event_id}")
         
+        # Notify WebSocket clients about schedule change
+        try:
+            from app.api.v1.websocket import manager
+            await manager.broadcast({
+                "type": "schedule_update",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
+        except Exception as e:
+            logger.warning(f"Failed to notify WebSocket clients: {e}")
+        
         return {
             "success": True,
             "event": {
@@ -733,6 +753,16 @@ async def delete_calendar_event(event_id: str, calendar_id: str = Query(default=
         )
         
         logger.info(f"Deleted Google Calendar event: {event_id}")
+        
+        # Notify WebSocket clients about schedule change
+        try:
+            from app.api.v1.websocket import manager
+            await manager.broadcast({
+                "type": "schedule_update",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
+        except Exception as e:
+            logger.warning(f"Failed to notify WebSocket clients: {e}")
         
         return {
             "success": True,
