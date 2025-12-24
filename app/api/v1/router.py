@@ -12,6 +12,7 @@ from app.api.v1.cevio import router as cevio_router
 from app.api.v1.google_calendar import router as google_calendar_router
 from app.api.v1.auto_post import router as auto_post_router
 from app.api.v1.websocket import router as websocket_router
+from app.api.v1.storage import router as storage_router
 
 # Main v1 router
 api_router = APIRouter(prefix="/api/v1")
@@ -25,4 +26,5 @@ api_router.include_router(cevio_router)
 api_router.include_router(google_calendar_router)
 api_router.include_router(auto_post_router)
 api_router.include_router(websocket_router)
+api_router.include_router(storage_router)
 
