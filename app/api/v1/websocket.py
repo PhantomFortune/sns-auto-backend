@@ -106,6 +106,9 @@ async def get_x_auto_post_schedules() -> List[dict]:
             if start_str:
                 try:
                     start_date = datetime.fromisoformat(start_str.replace('Z', '+00:00'))
+                    # offset-naiveの場合はUTCとして扱う
+                    if start_date.tzinfo is None:
+                        start_date = start_date.replace(tzinfo=timezone.utc)
                     if start_date >= now:
                         future_schedules.append(schedule)
                 except Exception as e:
@@ -180,6 +183,9 @@ async def get_all_schedules() -> List[dict]:
             if start_str:
                 try:
                     start_date = datetime.fromisoformat(start_str.replace('Z', '+00:00'))
+                    # offset-naiveの場合はUTCとして扱う
+                    if start_date.tzinfo is None:
+                        start_date = start_date.replace(tzinfo=timezone.utc)
                     if start_date >= now:
                         future_schedules.append(schedule)
                 except Exception as e:
