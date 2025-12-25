@@ -12,10 +12,13 @@ import uuid
 import base64
 import pandas as pd
 from pathlib import Path
+import shutil
+import os
 # PIL imports removed - no longer needed since we don't composite images
 
 from app.database import get_db
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from app.models.storage_file import StorageFile, ReportType, FileCategory, ScheduledPost
 from app.schemas.storage import (
     SaveReportRequest,
@@ -757,4 +760,69 @@ async def get_scheduled_post_image(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"画像の取得に失敗しました: {str(e)}"
+        )
+
+
+@router.get("/storage-stats")
+async def get_storage_stats(db: Session = Depends(get_db)):
+    """
+    ストレージの使用状況を取得
+    - ドライブの総容量
+    - 使用可能な容量
+    - ストレージディレクトリの使用容量
+    """
+    try:
+        # ストレージディレクトリのパスを取得
+        storage_path = storage_service.storage_dir
+        
+        # ストレージディレクトリがあるドライブの容量を取得
+        try:
+            total, used, free = shutil.disk_usage(storage_path)
+        except Exception as e:
+            logger.warning(f"Failed to get disk usage: {e}")
+            # フォールバック: デフォルト値を使用
+            total = 120 * 1024 * 1024 * 1024  # 120GB
+            free = total
+            used = 0
+        
+        # ストレージディレクトリの実際の使用容量を計算
+        storage_used = 0
+        try:
+            for root, dirs, files in os.walk(storage_path):
+                for file in files:
+                    file_path = Path(root) / file
+                    try:
+                        storage_used += file_path.stat().st_size
+                    except Exception:
+                        pass
+        except Exception as e:
+            logger.warning(f"Failed to calculate storage usage: {e}")
+        
+        # データベースからファイルサイズの合計を取得（検証用）
+        db_total_bytes = db.query(func.sum(StorageFile.file_size)).scalar() or 0
+        
+        return {
+            "success": True,
+            "drive": {
+                "total_bytes": total,
+                "used_bytes": used,
+                "free_bytes": free,
+                "total_gb": total / (1024 ** 3),
+                "used_gb": used / (1024 ** 3),
+                "free_gb": free / (1024 ** 3),
+            },
+            "storage_directory": {
+                "used_bytes": storage_used,
+                "used_gb": storage_used / (1024 ** 3),
+                "path": str(storage_path),
+            },
+            "database_total_bytes": db_total_bytes,
+            "database_total_gb": db_total_bytes / (1024 ** 3),
+        }
+    
+    except Exception as e:
+        logger.error(f"Failed to get storage stats: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"ストレージ統計の取得に失敗しました: {str(e)}"
         )
