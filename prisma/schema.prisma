@@ -1,5 +1,6 @@
 // Prisma Schema File
 // This file defines your database structure for Prisma Studio visualization
+// Note: This project uses SQLAlchemy as the main ORM. This Prisma schema is only for visualization purposes.
 
 generator client {
   provider = "prisma-client-js"
@@ -8,6 +9,16 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+enum filecategory {
+  REPORT
+  SCHEDULED_POST
+}
+
+enum reporttype {
+  YOUTUBE_ANALYTICS
+  X_ANALYTICS
 }
 
 model ShortsScript {
@@ -46,5 +57,38 @@ model LivePlan {
   @@index([type])
   @@index([title])
   @@map("live_plans")
+}
+
+model StorageFile {
+  id          String        @id
+  category    filecategory
+  reportType  reporttype?   @map("report_type")
+  fileName    String        @map("file_name") @db.VarChar
+  filePath    String        @unique @map("file_path") @db.VarChar
+  fileSize    Int           @map("file_size")
+  description String?       @db.Text
+  createdAt   DateTime      @map("created_at") @default(now())
+  updatedAt   DateTime      @map("updated_at") @updatedAt
+
+  @@index([category])
+  @@index([reportType])
+  @@index([fileName])
+  @@index([createdAt])
+  @@map("storage_files")
+}
+
+model ScheduledPost {
+  id               String   @id
+  content          String   @db.Text
+  imagePath        String?  @map("image_path") @db.VarChar
+  scheduledDatetime DateTime @map("scheduled_datetime") @db.Timestamptz
+  status           String   @db.VarChar
+  createdAt        DateTime @map("created_at") @default(now())
+  updatedAt        DateTime @map("updated_at") @updatedAt
+
+  @@index([scheduledDatetime])
+  @@index([status])
+  @@index([createdAt])
+  @@map("scheduled_posts")
 }
 
